@@ -16,14 +16,14 @@ context.scale(dpr, dpr)
 // 响应式网格计算
 const maxCols = 8;
 const maxRows = 10;
-const padding = 6; // 增大间距，让布局更宽松
+const padding = 18; // 继续增大间距，预留足够的空间给向外伸出的小短腿
 const gridSize = Math.floor((windowWidth - 20 - (maxCols - 1) * padding) / maxCols);
 
 const directions = ['up', 'down', 'left', 'right'];
 
 const animalTypes = {
   'cat': { type: 'cat', color: '#ff9ff3', darkColor: '#f368e0' },
-  'bear': { type: 'bear', color: '#feca57', darkColor: '#ff9f43' },
+  'dog': { type: 'dog', color: '#feca57', darkColor: '#ff9f43' },
   'frog': { type: 'frog', color: '#1dd1a1', darkColor: '#10ac84' },
   'pig': { type: 'pig', color: '#c8d6e5', darkColor: '#8395a7' },
   'elephant': { type: 'elephant', color: '#a4b0be', darkColor: '#747d8c' },
@@ -78,8 +78,8 @@ function generateLevel(levelIndex) {
             } else {
               while (bh < maxLen && r + bh < h && grid[r+bh][c] === -1) bh++;
             }
-            if (bw > 1) type = bw === 3 ? 'bear' : 'cat';
-            if (bh > 1) type = bh === 3 ? 'bear' : 'cat';
+            if (bw > 1) type = bw === 3 ? 'dog' : 'cat';
+            if (bh > 1) type = bh === 3 ? 'dog' : 'cat';
           }
           
           let block = { id: blockId++, r, c, w: bw, h: bh, type };
@@ -251,39 +251,13 @@ let comboCount = 0;
 let lastClearTime = 0;
 let comboTexts = [];
 
-// 分享变现相关状态
-let shareCount = wx.getStorageSync('LuluJam_ShareCount') || 0;
-let isPendingShare = false;
-let shareStartTime = 0;
-
+// 默认支持右上角菜单分享，但不绑定游戏内奖励
 wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage', 'shareTimeline'] });
 wx.onShareAppMessage(() => {
   return {
     title: '哎呀，这只猪卡死我了！快来帮我挪一下！',
     imageUrl: '' 
   };
-});
-
-wx.onShow(() => {
-  if (isPendingShare) {
-    isPendingShare = false;
-    let timeDiff = Date.now() - shareStartTime;
-    
-    // 假分享判定：离开微信小游戏必须超过 2.5 秒
-    if (timeDiff > 2500) {
-      shareCount++;
-      wx.setStorageSync('LuluJam_ShareCount', shareCount);
-      useShuffleProp();
-      wx.showToast({ title: '洗牌成功！', icon: 'success' });
-    } else {
-      wx.showModal({
-        title: '分享失败',
-        content: '请不要频繁取消，试着真心分享给不同的微信群或好友吧！',
-        showCancel: false,
-        confirmText: '我知道了'
-      });
-    }
-  }
 });
 
 const propButton = {
@@ -427,36 +401,26 @@ wx.onTouchEnd((e) => {
     ty >= propButton.y && ty <= propButton.y + propButton.height &&
     blocks.length > 0 
   ) {
-    if (shareCount === 0) {
-      // 第 1 次点击：触发假分享套路
-      shareStartTime = Date.now();
-      isPendingShare = true;
-      wx.shareAppMessage({
-        title: '这关实在太难了，谁来帮我挪一下这头猪！'
-      });
-    } else {
-      // 第 2 次及以后：永久变成看广告
-      wx.showModal({
-        title: '使用魔法洗牌',
-        content: '观看一段视频广告即可随机改变3个小动物的方向，帮您破局！',
-        confirmText: '看视频',
-        confirmColor: '#09BB07',
-        cancelText: '取消',
-        success(res) {
-          if (res.confirm) {
-            isAdPlaying = true;
-            wx.showLoading({ title: '广告加载中...', mask: true });
-            // 模拟广告播放成功
-            setTimeout(() => {
-              wx.hideLoading();
-              isAdPlaying = false;
-              useShuffleProp();
-              wx.showToast({ title: '洗牌成功！', icon: 'success' });
-            }, 1500);
-          }
+    wx.showModal({
+      title: '使用魔法洗牌',
+      content: '观看一段视频广告即可随机改变3个小动物的方向，帮您破局！',
+      confirmText: '看视频',
+      confirmColor: '#09BB07',
+      cancelText: '取消',
+      success(res) {
+        if (res.confirm) {
+          isAdPlaying = true;
+          wx.showLoading({ title: '广告加载中...', mask: true });
+          // 模拟广告播放成功
+          setTimeout(() => {
+            wx.hideLoading();
+            isAdPlaying = false;
+            useShuffleProp();
+            wx.showToast({ title: '洗牌成功！', icon: 'success' });
+          }, 1500);
         }
-      });
-    }
+      }
+    });
     return; 
   }
 
@@ -559,7 +523,7 @@ function drawPropButton(ctx) {
 
   ctx.fillStyle = '#ff7f50';
   drawRoundRect(ctx, propButton.x, propButton.y + 5, propButton.width, propButton.height, 25);
-  ctx.fillStyle = shareCount === 0 ? '#1dd1a1' : '#ffa502'; // 首充(分享)用绿色，之后用橙色
+  ctx.fillStyle = '#ffa502';
   drawRoundRect(ctx, propButton.x, propButton.y, propButton.width, propButton.height, 25);
   
   ctx.fillStyle = 'white';
@@ -570,26 +534,20 @@ function drawPropButton(ctx) {
   
   const badgeX = propButton.x + propButton.width - 40;
   const badgeY = propButton.y - 8;
-  ctx.fillStyle = shareCount === 0 ? '#0984e3' : '#ff4757';
+  ctx.fillStyle = '#ff4757';
   drawRoundRect(ctx, badgeX, badgeY, 65, 20, 10);
   ctx.fillStyle = 'white';
   ctx.font = 'bold 11px Arial';
-  ctx.fillText(shareCount === 0 ? '↗️ 分享' : '▶ 视频', badgeX + 32, badgeY + 10);
+  ctx.fillText('▶ 视频', badgeX + 32, badgeY + 10);
 }
 
-function draw3DAnimalBlock(ctx, b) {
+function draw3DAnimalBlock(ctx, b, time = 0) {
   const scale = b.baseSize / 64;
   
   const r = 16 * scale; 
   let depth = 12 * scale; 
   let drawX = b.x;
   let drawY = b.y;
-  
-  // 抖动动画
-  if (b.shakeTimer > 0) {
-    drawX += (Math.random() - 0.5) * 6; 
-    drawY += (Math.random() - 0.5) * 6;
-  }
   
   if (b.state === 'flying') {
     drawY -= 8 * scale; 
@@ -599,14 +557,106 @@ function draw3DAnimalBlock(ctx, b) {
     depth -= 6 * scale;
   }
 
+  // --- 计算动画参数 ---
+  let legSwing = 0;
+  let tailWag = 0;
+  let breatheY = 0;
+  
+  if (b.state === 'flying') {
+    legSwing = Math.sin(time / 40) * 12 * scale;  // 腿摆动
+    tailWag = Math.sin(time / 40) * 0.5;          // 尾巴摇
+    breatheY = Math.abs(Math.sin(time / 40)) * 2 * scale; // 身体颠簸
+  } else if (b.state === 'idle' && !b.isSleeping) {
+    breatheY = Math.sin(time / 200) * 1.5 * scale; // 缓慢呼吸
+  }
+
+  // 腿和尾巴将在厚度与顶层之间绘制
+
+  // 呼吸/颠簸对主体的Y偏移
+  drawY -= breatheY;
+
+  let bodyR = Math.min(b.width, b.height) / 2.2; // 让身体变成圆润的胶囊形，不再那么方
+
   ctx.fillStyle = 'rgba(0,0,0,0.2)';
-  drawPointyRect(ctx, drawX + 4 * scale, drawY + depth + 4 * scale, b.width, b.height, r, b.direction);
+  drawRoundRect(ctx, drawX + 4 * scale, drawY + depth + 4 * scale, b.width, b.height, bodyR);
 
   ctx.fillStyle = b.state === 'returning' ? '#e74c3c' : b.darkColor;
-  drawPointyRect(ctx, drawX, drawY + depth, b.width, b.height, r, b.direction);
+  drawRoundRect(ctx, drawX, drawY + depth, b.width, b.height, bodyR);
+
+  // --- 绘制腿和尾巴 (夹在厚度和顶层之间，这样下侧的腿不会被厚度阴影遮挡) ---
+  ctx.save();
+  ctx.translate(drawX + b.width / 2, drawY + b.height / 2);
+  if (b.direction === 'right') ctx.rotate(Math.PI / 2);
+  else if (b.direction === 'down') ctx.rotate(Math.PI);
+  else if (b.direction === 'left') ctx.rotate(-Math.PI / 2);
+  
+  let localW = (b.direction === 'up' || b.direction === 'down') ? b.width : b.height;
+  let localH = (b.direction === 'up' || b.direction === 'down') ? b.height : b.width;
+  
+  // 腿 (使用比 darkColor 更深一点的颜色或者直接使用 darkColor)
+  ctx.fillStyle = b.darkColor; 
+  let legW = 12 * scale;
+  let legH = 16 * scale;
+  let legDistX = localW / 2 - 2 * scale; // 稍微缩回一点，让腿看起来连接着身体
+  let legDistY = localH / 2 - 16 * scale;
+  if (legDistY < 12 * scale) legDistY = 12 * scale; // 保证前后腿有足够的间距
+  
+  // 核心：处理 2.5D 深度遮挡问题
+  // 对于在世界坐标中朝下（+Y，南侧）的腿或尾巴，它们会被身体的 3D 厚度层（depth）遮挡。
+  // 因此必须将它们在世界 +Y 方向平移 depth 的距离，让它们延伸出厚度层！
+  let drawLeg = (lx, ly) => {
+      let worldY = 0;
+      if (b.direction === 'right') worldY = lx;
+      else if (b.direction === 'down') worldY = -ly;
+      else if (b.direction === 'left') worldY = -lx;
+      else if (b.direction === 'up') worldY = ly;
+      
+      let finalX = lx;
+      let finalY = ly;
+      if (worldY > 0) { // 位于南侧（下侧）
+          if (b.direction === 'right') finalX += depth;
+          else if (b.direction === 'down') finalY -= depth;
+          else if (b.direction === 'left') finalX -= depth;
+          else if (b.direction === 'up') finalY += depth;
+      }
+      drawRoundRect(ctx, finalX - legW/2, finalY - legH/2, legW, legH, 4 * scale);
+  };
+
+  // 左前, 右前, 左后, 右后 (交替摆动)
+  drawLeg(-legDistX, -legDistY + legSwing);
+  drawLeg(legDistX, -legDistY - legSwing);
+  drawLeg(-legDistX, legDistY - legSwing);
+  drawLeg(legDistX, legDistY + legSwing);
+
+  // 尾巴
+  let tailWorldY = 0;
+  if (b.direction === 'up') tailWorldY = localH / 2; // 尾巴在尾部(+Y)，只有朝上时尾巴才在世界南侧
+  let tailShiftY = tailWorldY > 0 ? depth : 0;
+  
+  ctx.save();
+  ctx.translate(0, localH / 2 + tailShiftY);
+  ctx.rotate(tailWag);
+  if (b.type === 'pig') {
+     ctx.strokeStyle = '#ff7675';
+     ctx.lineWidth = 4 * scale;
+     ctx.lineCap = 'round';
+     ctx.beginPath(); ctx.arc(0, 6*scale, 4*scale, -Math.PI/2, Math.PI); ctx.stroke();
+  } else if (b.type === 'cat') {
+     ctx.fillStyle = b.color;
+     drawRoundRect(ctx, -3*scale, 0, 6*scale, 20*scale, 3*scale);
+  } else if (b.type === 'dog' || b.type === 'elephant' || b.type === 'hedgehog') {
+     ctx.fillStyle = b.color;
+     ctx.beginPath(); ctx.arc(0, 5*scale, 5*scale, 0, Math.PI*2); ctx.fill();
+  } else if (b.type === 'turtle') {
+     ctx.fillStyle = '#6ab04c';
+     ctx.beginPath(); ctx.moveTo(-4*scale, 0); ctx.lineTo(4*scale, 0); ctx.lineTo(0, 10*scale); ctx.fill();
+  }
+  ctx.restore();
+  ctx.restore();
+  // --- 结束腿和尾巴绘制 ---
 
   ctx.fillStyle = b.state === 'returning' ? '#ff7675' : b.color;
-  drawPointyRect(ctx, drawX, drawY, b.width, b.height, r, b.direction);
+  drawRoundRect(ctx, drawX, drawY, b.width, b.height, bodyR);
 
   ctx.save();
   ctx.translate(drawX + b.width / 2, drawY + b.height / 2);
@@ -615,9 +665,15 @@ function draw3DAnimalBlock(ctx, b) {
   else if (b.direction === 'down') ctx.rotate(Math.PI);
   else if (b.direction === 'left') ctx.rotate(-Math.PI / 2);
   
-  // 由于头部变尖，将视觉中心稍微向后偏移，使五官看起来居中
+  // 将脸部移到身体的前端（头部）
   let localBase = (b.direction === 'up' || b.direction === 'down') ? b.width : b.height;
-  ctx.translate(0, (localBase / scale) * 0.08);
+  let localLen = (b.direction === 'up' || b.direction === 'down') ? b.height : b.width;
+  
+  let faceShiftY = -(localLen / 2) + (22 * scale);
+  if (faceShiftY > -(localBase / 2) * 0.1) {
+      faceShiftY = -(localBase / 2) * 0.1; 
+  }
+  ctx.translate(0, faceShiftY);
 
   // 稍微缩小五官比例，让小动物在方块内留有舒适的空白边距
   ctx.scale(scale * 0.85, scale * 0.85);
@@ -631,13 +687,10 @@ function draw3DAnimalBlock(ctx, b) {
     ctx.fillStyle = b.darkColor;
     ctx.beginPath(); ctx.moveTo(-16, -hh + 8); ctx.lineTo(-20, -hh - 4); ctx.lineTo(-8, -hh + 8); ctx.fill();
     ctx.beginPath(); ctx.moveTo(16, -hh + 8); ctx.lineTo(20, -hh - 4); ctx.lineTo(8, -hh + 8); ctx.fill();
-  } else if (b.type === 'bear') {
-    ctx.fillStyle = b.color;
-    ctx.beginPath(); ctx.arc(-18, -hh + 6, 10, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(18, -hh + 6, 10, 0, Math.PI*2); ctx.fill();
+  } else if (b.type === 'dog') {
     ctx.fillStyle = b.darkColor;
-    ctx.beginPath(); ctx.arc(-18, -hh + 6, 5, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(18, -hh + 6, 5, 0, Math.PI*2); ctx.fill();
+    drawRoundRect(ctx, -26, -hh + 8, 12, 24, 6);
+    drawRoundRect(ctx, 14, -hh + 8, 12, 24, 6);
   } else if (b.type === 'frog') {
     ctx.fillStyle = b.color;
     ctx.beginPath(); ctx.arc(-15, -hh + 4, 12, 0, Math.PI*2); ctx.fill();
@@ -684,11 +737,11 @@ function draw3DAnimalBlock(ctx, b) {
     ctx.fillStyle = '#d63031';
     ctx.beginPath(); ctx.arc(-5, 5, 2.5, 0, Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(5, 5, 2.5, 0, Math.PI*2); ctx.fill();
-  } else if (b.type === 'bear') {
+  } else if (b.type === 'dog') {
     ctx.fillStyle = '#ffeaa7';
     ctx.beginPath(); ctx.arc(0, 4, 12, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = '#2d3436';
-    ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-5, -1); ctx.lineTo(5, -1); ctx.lineTo(0, 4); ctx.fill();
   } else if (b.type === 'cat') {
     ctx.fillStyle = '#ff7675';
     ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
@@ -792,6 +845,7 @@ function draw3DAnimalBlock(ctx, b) {
 }
 
 function loop() {
+  let now = Date.now();
   context.clearRect(0, 0, windowWidth, windowHeight);
   // 绘制舒适的柔和背景渐变 (护眼暖绿色调)
   let bgGradient = context.createLinearGradient(0, 0, 0, windowHeight);
@@ -836,8 +890,6 @@ function loop() {
 
   for (let i = blocks.length - 1; i >= 0; i--) {
     let b = blocks[i];
-    
-    if (b.shakeTimer > 0) b.shakeTimer--;
 
     if (b.state === 'flying') {
       if (b.direction === 'up') b.y -= b.speed;
@@ -858,10 +910,17 @@ function loop() {
       }
 
       if (hitTarget) {
-        b.state = 'returning';
+        while (checkCollision(b, hitTarget)) {
+          if (b.direction === 'up') b.y += 1;
+          else if (b.direction === 'down') b.y -= 1;
+          else if (b.direction === 'left') b.x += 1;
+          else if (b.direction === 'right') b.x -= 1;
+        }
+        b.state = 'idle';
+        b.startX = b.x;
+        b.startY = b.y;
         b.trail = []; 
         
-        hitTarget.shakeTimer = 8;
         AudioManager.playError();
         
         if (hitTarget.isSleeping) {
@@ -882,7 +941,6 @@ function loop() {
         blocks.splice(i, 1);
         
         // 连击判定
-        let now = Date.now();
         if (now - lastClearTime < 1200) {
           comboCount++;
           if (comboCount > 1) {
@@ -951,7 +1009,7 @@ function loop() {
   }
 
   for (let b of blocks) {
-    draw3DAnimalBlock(context, b);
+    draw3DAnimalBlock(context, b, now);
   }
 
   // 渲染连击飘字特效
