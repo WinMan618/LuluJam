@@ -31,6 +31,17 @@ const animalTypes = {
   'hedgehog': { type: 'hedgehog', color: '#ffbe76', darkColor: '#f0932b' }
 };
 
+function isTargetable(target, blocks) {
+  for (let a of blocks) {
+    if (a.id === target.id) continue;
+    if (a.dir === 'up' && a.r > target.r && a.c < target.c + target.w && a.c + a.w > target.c) return true;
+    if (a.dir === 'down' && a.r < target.r && a.c < target.c + target.w && a.c + a.w > target.c) return true;
+    if (a.dir === 'left' && a.c > target.c && a.r < target.r + target.h && a.r + a.h > target.r) return true;
+    if (a.dir === 'right' && a.c < target.c && a.r < target.r + target.h && a.r + a.h > target.r) return true;
+  }
+  return false;
+}
+
 function generateLevel(levelIndex) {
   let attempts = 0;
   while (attempts < 100) {
@@ -181,7 +192,7 @@ function generateLevel(levelIndex) {
       // 第8关引入贪睡龟 (Sleeping Turtle)
       if (levelIndex >= 7) {
          let turtlesCount = Math.min(3, 1 + Math.floor((levelIndex - 7)/3));
-         let smallBlocks = assigned.filter(b => b.w === 1 && b.h === 1 && !b.ropes && !b.tool);
+         let smallBlocks = assigned.filter(b => b.w === 1 && b.h === 1 && !b.ropes && !b.tool && isTargetable(b, assigned));
          smallBlocks.sort(() => 0.5 - Math.random());
          for(let i=0; i<turtlesCount; i++) {
              if (smallBlocks[i]) {
@@ -601,6 +612,14 @@ function draw3DAnimalBlock(ctx, b, time = 0) {
   let legDistY = localH / 2 - 16 * scale;
   if (legDistY < 12 * scale) legDistY = 12 * scale; // 保证前后腿有足够的间距
   
+  // 针对大象进行专属的腿部微调
+  if (b.type === 'elephant') {
+     legW = 22 * scale;   // 大象的腿更粗
+     legH = 26 * scale;   // 大象的腿更长
+     legDistX = localW / 2 - 14 * scale; // 大象身体非常圆润，腿需要往里多缩一点才能完全接上
+     legDistY = localH / 2 - 26 * scale;
+  }
+  
   // 核心：处理 2.5D 深度遮挡问题
   // 对于在世界坐标中朝下（+Y，南侧）的腿或尾巴，它们会被身体的 3D 厚度层（depth）遮挡。
   // 因此必须将它们在世界 +Y 方向平移 depth 的距离，让它们延伸出厚度层！
@@ -811,37 +830,31 @@ function draw3DAnimalBlock(ctx, b, time = 0) {
     }
   }
 
-  // 画剪刀图标
+  ctx.restore();
+
+  // 移出 face 坐标系，在方块中心绘制剪刀
   if (b.tool === 'scissors') {
-     // 撤销自身的旋转，保证剪刀永远正向显示
-     ctx.rotate(
-       b.direction === 'right' ? -Math.PI / 2 :
-       b.direction === 'down' ? -Math.PI :
-       b.direction === 'left' ? Math.PI / 2 : 0
-     );
+     ctx.save();
+     ctx.translate(drawX + b.width / 2, drawY + b.height / 2);
      
-     let localW = b.width / scale;
-     let localH = b.height / scale;
-     
-     let iconX = localW / 2 - 20;
-     let iconY = -localH / 2 + 20;
+     // 恢复原来的行为：让剪刀永远保持正向显示，不再跟随动物方向旋转
      
      ctx.fillStyle = 'rgba(255,255,255,0.95)';
      ctx.shadowColor = 'rgba(0,0,0,0.4)';
      ctx.shadowBlur = 6;
      ctx.beginPath();
-     ctx.arc(iconX, iconY, 18, 0, Math.PI*2);
+     ctx.arc(0, 0, 26 * scale, 0, Math.PI*2); 
      ctx.fill();
      ctx.shadowColor = 'transparent'; 
      
-     ctx.font = '24px Arial';
+     ctx.font = Math.floor(36 * scale) + 'px Arial';
      ctx.fillStyle = '#000';
      ctx.textAlign = 'center';
      ctx.textBaseline = 'middle';
-     ctx.fillText('✂️', iconX, iconY + 1);
+     ctx.fillText('✂️', 0, 2 * scale);
+     
+     ctx.restore();
   }
-
-  ctx.restore();
 }
 
 function loop() {
@@ -916,9 +929,8 @@ function loop() {
           else if (b.direction === 'left') b.x += 1;
           else if (b.direction === 'right') b.x -= 1;
         }
-        b.state = 'idle';
-        b.startX = b.x;
-        b.startY = b.y;
+        // 撞击后退回原位，而不是停在半路
+        b.state = 'returning';
         b.trail = []; 
         
         AudioManager.playError();
