@@ -14,9 +14,9 @@ canvas.height = windowHeight * dpr
 context.scale(dpr, dpr)
 
 // 响应式网格计算
-const maxCols = 8;
-const maxRows = 10;
-const padding = 18; // 继续增大间距，预留足够的空间给向外伸出的小短腿
+const maxCols = 10;
+const maxRows = 12;
+const padding = 12; // 缩小间距，使格子显得更大更紧凑
 const gridSize = Math.floor((windowWidth - 20 - (maxCols - 1) * padding) / maxCols);
 
 const directions = ['up', 'down', 'left', 'right'];
@@ -257,6 +257,37 @@ let currentLevelIndex = wx.getStorageSync('LuluJam_Level') || 0;
 let blocks = [];
 let hasShownRopeTutorial = false;
 
+// 游戏状态管理
+let gameState = 'HOME'; // 'HOME', 'PLAYING', 'RANK'
+const startButton = {
+  x: windowWidth / 2 - 100,
+  y: windowHeight / 2 + 20,
+  width: 200,
+  height: 60,
+  text: '开始游戏'
+};
+
+const rankButton = {
+  x: windowWidth / 2 - 100,
+  y: windowHeight / 2 + 100,
+  width: 200,
+  height: 50,
+  text: '🏆 好友排行榜'
+};
+
+const closeRankButton = {
+  x: windowWidth / 2 - 60,
+  y: windowHeight * 0.85 + 20,
+  width: 120,
+  height: 40,
+  text: '❌ 关闭'
+};
+
+const openDataContext = wx.getOpenDataContext();
+const sharedCanvas = openDataContext.canvas;
+sharedCanvas.width = windowWidth;
+sharedCanvas.height = windowHeight;
+
 // 连击系统状态
 let comboCount = 0;
 let lastClearTime = 0;
@@ -279,8 +310,24 @@ const propButton = {
   text: '🎲 魔法洗牌'
 };
 
+const homeButton = {
+  x: 20,
+  y: 40,
+  width: 90,
+  height: 40,
+  text: '🏠 首页'
+};
+
 function initLevel(levelIdx) {
   blocks = [];
+  
+  // 向子域发送最新分数
+  if (typeof openDataContext !== 'undefined') {
+    openDataContext.postMessage({
+      command: 'updateScore',
+      level: levelIdx
+    });
+  }
   
   const levelConfig = generateLevel(levelIdx);
   
@@ -400,10 +447,50 @@ wx.onTouchEnd((e) => {
 
   if (Math.abs(tx - touchStartX) > 20 || Math.abs(ty - touchStartY) > 20) return;
 
+  if (gameState === 'HOME') {
+    if (
+      tx >= startButton.x && tx <= startButton.x + startButton.width &&
+      ty >= startButton.y && ty <= startButton.y + startButton.height
+    ) {
+      gameState = 'PLAYING';
+      AudioManager.playClear();
+    }
+    if (
+      tx >= rankButton.x && tx <= rankButton.x + rankButton.width &&
+      ty >= rankButton.y && ty <= rankButton.y + rankButton.height
+    ) {
+      gameState = 'RANK';
+      AudioManager.playClear();
+      openDataContext.postMessage({ command: 'showLeaderboard' });
+    }
+    return; 
+  }
+
+  if (gameState === 'RANK') {
+    if (
+      tx >= closeRankButton.x && tx <= closeRankButton.x + closeRankButton.width &&
+      ty >= closeRankButton.y && ty <= closeRankButton.y + closeRankButton.height
+    ) {
+      gameState = 'HOME';
+      AudioManager.playClear();
+    }
+    return;
+  }
+
   if (blocks.length === 0) {
     currentLevelIndex++;
     wx.setStorageSync('LuluJam_Level', currentLevelIndex);
     initLevel(currentLevelIndex);
+    return;
+  }
+
+  if (
+    tx >= homeButton.x && tx <= homeButton.x + homeButton.width &&
+    ty >= homeButton.y && ty <= homeButton.y + homeButton.height &&
+    gameState === 'PLAYING'
+  ) {
+    gameState = 'HOME';
+    AudioManager.playClear();
     return;
   }
 
@@ -550,6 +637,17 @@ function drawPropButton(ctx) {
   ctx.fillStyle = 'white';
   ctx.font = 'bold 11px Arial';
   ctx.fillText('▶ 视频', badgeX + 32, badgeY + 10);
+}
+
+function drawHomeButton(ctx) {
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+  drawRoundRect(ctx, homeButton.x, homeButton.y, homeButton.width, homeButton.height, 20);
+  
+  ctx.fillStyle = '#2d3436';
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(homeButton.text, homeButton.x + homeButton.width / 2, homeButton.y + homeButton.height / 2);
 }
 
 function draw3DAnimalBlock(ctx, b, time = 0) {
@@ -857,6 +955,61 @@ function draw3DAnimalBlock(ctx, b, time = 0) {
   }
 }
 
+function drawHome(ctx) {
+  // 绘制标题
+  ctx.fillStyle = '#2d3436';
+  ctx.font = 'bold 48px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('噜噜让一让', windowWidth / 2, windowHeight / 2 - 100);
+
+  // 绘制副标题或关卡
+  ctx.font = '20px Arial';
+  ctx.fillStyle = '#636e72';
+  ctx.fillText('当前: ' + (blocks.levelName || `第 ${currentLevelIndex + 1} 关`), windowWidth / 2, windowHeight / 2 - 40);
+
+  // 绘制开始按钮阴影
+  ctx.fillStyle = '#079e05';
+  drawRoundRect(ctx, startButton.x, startButton.y + 6, startButton.width, startButton.height, 30);
+  
+  // 绘制开始按钮
+  ctx.fillStyle = '#09BB07'; // 微信绿
+  drawRoundRect(ctx, startButton.x, startButton.y, startButton.width, startButton.height, 30);
+  
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 24px Arial';
+  ctx.fillText(startButton.text, windowWidth / 2, startButton.y + startButton.height / 2);
+
+  // 绘制排行榜按钮阴影
+  ctx.fillStyle = '#d35400';
+  drawRoundRect(ctx, rankButton.x, rankButton.y + 5, rankButton.width, rankButton.height, 25);
+  
+  // 绘制排行榜按钮
+  ctx.fillStyle = '#e67e22'; // 橙色
+  drawRoundRect(ctx, rankButton.x, rankButton.y, rankButton.width, rankButton.height, 25);
+  
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 20px Arial';
+  ctx.fillText(rankButton.text, windowWidth / 2, rankButton.y + rankButton.height / 2);
+}
+
+function drawRank(ctx) {
+  // 绘制子域画布
+  ctx.drawImage(sharedCanvas, 0, 0, windowWidth, windowHeight);
+  
+  // 绘制关闭按钮
+  ctx.fillStyle = '#c0392b';
+  drawRoundRect(ctx, closeRankButton.x, closeRankButton.y + 4, closeRankButton.width, closeRankButton.height, 20);
+  ctx.fillStyle = '#e74c3c';
+  drawRoundRect(ctx, closeRankButton.x, closeRankButton.y, closeRankButton.width, closeRankButton.height, 20);
+  
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 18px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(closeRankButton.text, windowWidth / 2, closeRankButton.y + closeRankButton.height / 2);
+}
+
 function loop() {
   let now = Date.now();
   context.clearRect(0, 0, windowWidth, windowHeight);
@@ -875,6 +1028,18 @@ function loop() {
       context.arc(i*30 + 15, j*30 + 15, 1.5, 0, Math.PI*2); 
       context.fill();
     }
+  }
+  
+  if (gameState === 'HOME') {
+    drawHome(context);
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  if (gameState === 'RANK') {
+    drawRank(context);
+    requestAnimationFrame(loop);
+    return;
   }
   
   context.fillStyle = 'rgba(45, 52, 54, 0.8)';
@@ -1048,6 +1213,9 @@ function loop() {
   }
 
   drawPropButton(context);
+  if (gameState === 'PLAYING') {
+    drawHomeButton(context);
+  }
 
   requestAnimationFrame(loop);
 }
